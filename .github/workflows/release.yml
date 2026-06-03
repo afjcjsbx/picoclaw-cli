@@ -1,0 +1,100 @@
+name: Release
+
+on:
+  release:
+    types:
+      - published
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            ext: ""
+            archive: tar.gz
+          - goos: linux
+            goarch: arm64
+            ext: ""
+            archive: tar.gz
+          - goos: darwin
+            goarch: amd64
+            ext: ""
+            archive: tar.gz
+          - goos: darwin
+            goarch: arm64
+            ext: ""
+            archive: tar.gz
+          - goos: windows
+            goarch: amd64
+            ext: .exe
+            archive: zip
+          - goos: windows
+            goarch: arm64
+            ext: .exe
+            archive: zip
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Package release artifact
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ github.event.release.tag_name }}"
+          asset_base="picoclaw-cli_${version#v}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          package_dir="dist/${asset_base}"
+          binary="picoclaw-cli${{ matrix.ext }}"
+
+          mkdir -p "$package_dir"
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+            go build -trimpath -ldflags="-s -w" -o "$package_dir/$binary" .
+          cp README.md LICENSE "$package_dir/"
+
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            archive_path="dist/${asset_base}.zip"
+            (cd "$package_dir" && zip -q -r "../$(basename "$archive_path")" .)
+          else
+            archive_path="dist/${asset_base}.tar.gz"
+            tar -C "$package_dir" -czf "$archive_path" .
+          fi
+
+          echo "archive_path=$archive_path" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ steps.package.outputs.archive_path }}
+          retention-days: 7
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+
+      - name: Upload assets to GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
