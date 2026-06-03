@@ -72,6 +72,7 @@ func readInput(ctx context.Context, conn *safeConn, render *renderer, input line
 		}
 
 		line, err := input.ReadLine()
+		input.AfterReadLine()
 		if !input.ManagesPrompt() {
 			render.closePrompt()
 		}

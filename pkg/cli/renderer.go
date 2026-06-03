@@ -36,11 +36,12 @@ type renderer struct {
 
 	out          io.Writer
 	managedInput bool
+	overlay      transientLine
 
 	messages map[string]messageView
 }
 
-func newRenderer(wsURL, sessionID string, showThoughts, showTools, compactTools bool, out io.Writer, managedInput bool) *renderer {
+func newRenderer(wsURL, sessionID string, showThoughts, showTools, compactTools bool, out io.Writer, managedInput bool, overlay transientLine) *renderer {
 	return &renderer{
 		wsURL:         wsURL,
 		sessionID:     sessionID,
@@ -49,6 +50,7 @@ func newRenderer(wsURL, sessionID string, showThoughts, showTools, compactTools 
 		compactTools:  compactTools,
 		out:           out,
 		managedInput:  managedInput,
+		overlay:       overlay,
 		messages:      make(map[string]messageView),
 		activeOpen:    false,
 		activeContent: "",
@@ -128,7 +130,7 @@ func (r *renderer) printWelcome() {
 		r.wrapKeyValue("Tool view", ternary(r.compactTools, "compact", "full")),
 		r.wrapKeyValue("Assistant replies", "markdown-rendered"),
 		r.wrapKeyValue("Commands", "/help /status /thoughts on|off /tools on|off /clear /quit"),
-		r.wrapKeyValue("Input", fmt.Sprintf("Use up/down arrows to browse saved command history (last %d entries)", defaultHistoryMaxEntries)),
+		r.wrapKeyValue("Input", fmt.Sprintf("Use up/down for saved history (last %d), live hints + Tab for /commands", defaultHistoryMaxEntries)),
 	}, "\n")
 	r.printPanel("Remote Pico CLI", body, colorAssistant)
 }
@@ -144,6 +146,8 @@ func (r *renderer) printHelp() {
 		"/quit                Exit",
 		"",
 		"Use the up/down arrow keys to browse previously submitted input.",
+		"Live suggestions appear while typing local /commands.",
+		"Press Tab to autocomplete local /commands and toggle values.",
 		fmt.Sprintf("History is persisted between sessions and keeps the last %d entries.", defaultHistoryMaxEntries),
 		"",
 		"Assistant replies render basic Markdown: headings, lists, links, tables, and code blocks.",
@@ -199,15 +203,19 @@ func (r *renderer) setTyping(typing bool) {
 		return
 	}
 	r.typing = typing
-	if r.managedInput {
-		r.mu.Unlock()
-		return
-	}
 	if typing {
 		r.spinnerSeq++
 		seq := r.spinnerSeq
 		r.mu.Unlock()
 		go r.runTypingSpinner(seq)
+		return
+	}
+	if r.managedInput {
+		overlay := r.overlay
+		r.mu.Unlock()
+		if overlay != nil {
+			overlay.ClearTransient()
+		}
 		return
 	}
 	r.clearSpinnerLocked()
@@ -383,21 +391,35 @@ func (r *renderer) runTypingSpinner(seq uint64) {
 	frame := 0
 	for {
 		r.mu.Lock()
+		managed := r.managedInput
+		overlay := r.overlay
 		if !r.typing || r.spinnerSeq != seq {
-			r.clearSpinnerLocked()
+			if !managed {
+				r.clearSpinnerLocked()
+			}
 			r.mu.Unlock()
+			if managed && overlay != nil {
+				overlay.ClearTransient()
+			}
 			return
 		}
 
-		if r.promptOpen {
-			fmt.Fprintln(r.out)
-			r.promptOpen = false
-		}
-
 		label := styleStatus.Render(typingSpinnerFrames[frame] + " Thinking")
-		fmt.Fprint(r.out, "\r\033[K"+label)
-		r.spinnerVisible = true
-		r.mu.Unlock()
+		if managed {
+			r.mu.Unlock()
+			if overlay != nil {
+				overlay.ShowTransient(label)
+			}
+		} else {
+			if r.promptOpen {
+				fmt.Fprintln(r.out)
+				r.promptOpen = false
+			}
+
+			fmt.Fprint(r.out, "\r\033[K"+label)
+			r.spinnerVisible = true
+			r.mu.Unlock()
+		}
 
 		frame = (frame + 1) % len(typingSpinnerFrames)
 		<-ticker.C

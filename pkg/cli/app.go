@@ -60,7 +60,12 @@ func Main() int {
 	}
 	defer input.Close()
 
-	render := newRenderer(wsURL, opts.sessionID, opts.showThoughts, opts.showTools, opts.compactTools, input.Output(), input.ManagesPrompt())
+	var overlay transientLine
+	if managed, ok := input.(transientLine); ok {
+		overlay = managed
+	}
+
+	render := newRenderer(wsURL, opts.sessionID, opts.showThoughts, opts.showTools, opts.compactTools, input.Output(), input.ManagesPrompt(), overlay)
 	render.printWelcome()
 
 	readErrCh := make(chan error, 1)

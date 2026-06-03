@@ -1,5 +1,7 @@
 # picoclaw-cli
 
+![picoclaw-cli](/assets/images/cli.png)
+
 A terminal-first remote CLI for PicoClaw.
 
 ## Usage
@@ -67,6 +69,8 @@ blocks.
 ## Interactive commands
 
 - Up/down arrows browse saved input history between sessions (last 100 entries)
+- As you type a local `/command`, matching suggestions appear in the prompt
+- `Tab` autocompletes local `/commands` and toggle values like `on`/`off`
 - `/help` shows the available commands
 - `/status` shows URL, session, and display toggles
 - `/session` prints the current session id
