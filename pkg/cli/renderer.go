@@ -128,7 +128,7 @@ func (r *renderer) printWelcome() {
 		r.wrapKeyValue("Tool view", ternary(r.compactTools, "compact", "full")),
 		r.wrapKeyValue("Assistant replies", "markdown-rendered"),
 		r.wrapKeyValue("Commands", "/help /status /thoughts on|off /tools on|off /clear /quit"),
-		r.wrapKeyValue("Input", "Use up/down arrows to browse command history"),
+		r.wrapKeyValue("Input", fmt.Sprintf("Use up/down arrows to browse saved command history (last %d entries)", defaultHistoryMaxEntries)),
 	}, "\n")
 	r.printPanel("Remote Pico CLI", body, colorAssistant)
 }
@@ -144,6 +144,7 @@ func (r *renderer) printHelp() {
 		"/quit                Exit",
 		"",
 		"Use the up/down arrow keys to browse previously submitted input.",
+		fmt.Sprintf("History is persisted between sessions and keeps the last %d entries.", defaultHistoryMaxEntries),
 		"",
 		"Assistant replies render basic Markdown: headings, lists, links, tables, and code blocks.",
 	}, "\n")

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -31,6 +32,15 @@ func newLineReader() (lineReader, error) {
 	}
 
 	editor := term.NewTerminal(stdioReadWriter{Reader: os.Stdin, Writer: os.Stdout}, promptText)
+	if historyPath, err := defaultHistoryPath(); err == nil {
+		if history, err := newPersistentHistory(historyPath, defaultHistoryMaxEntries); err == nil {
+			editor.History = history
+		} else {
+			fmt.Fprintf(os.Stderr, "warn> history persistence disabled: %v\n", err)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "warn> history persistence disabled: %v\n", err)
+	}
 	if width, height, err := term.GetSize(stdoutFD); err == nil && width > 0 && height > 0 {
 		_ = editor.SetSize(width, height)
 	}

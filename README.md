@@ -66,6 +66,7 @@ blocks.
 
 ## Interactive commands
 
+- Up/down arrows browse saved input history between sessions (last 100 entries)
 - `/help` shows the available commands
 - `/status` shows URL, session, and display toggles
 - `/session` prints the current session id
