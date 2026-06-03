@@ -53,7 +53,14 @@ func Main() int {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 
-	render := newRenderer(wsURL, opts.sessionID, opts.showThoughts, opts.showTools, opts.compactTools)
+	input, err := newLineReader()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error> input init failed: %v\n", err)
+		return 1
+	}
+	defer input.Close()
+
+	render := newRenderer(wsURL, opts.sessionID, opts.showThoughts, opts.showTools, opts.compactTools, input.Output(), input.ManagesPrompt())
 	render.printWelcome()
 
 	readErrCh := make(chan error, 1)
@@ -66,7 +73,7 @@ func Main() int {
 	inputDone := make(chan struct{})
 	go func() {
 		defer close(inputDone)
-		readInput(ctx, ws, render)
+		readInput(ctx, ws, render, input)
 	}()
 
 	select {

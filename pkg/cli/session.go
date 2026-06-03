@@ -1,11 +1,9 @@
 package cli
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -66,15 +64,17 @@ func pingLoop(ctx context.Context, conn *safeConn, interval time.Duration) {
 	}
 }
 
-func readInput(ctx context.Context, conn *safeConn, render *renderer) {
-	reader := bufio.NewReader(os.Stdin)
-
+func readInput(ctx context.Context, conn *safeConn, render *renderer, input lineReader) {
 	for {
 		render.finishActive()
-		render.printPrompt()
+		if !input.ManagesPrompt() {
+			render.printPrompt()
+		}
 
-		line, err := reader.ReadString('\n')
-		render.closePrompt()
+		line, err := input.ReadLine()
+		if !input.ManagesPrompt() {
+			render.closePrompt()
+		}
 		if err != nil {
 			if err == io.EOF {
 				return
@@ -89,13 +89,13 @@ func readInput(ctx context.Context, conn *safeConn, render *renderer) {
 		default:
 		}
 
-		input := strings.TrimSpace(line)
-		if input == "" {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
 			continue
 		}
 
-		if handleLocalCommand(input, render) {
-			if input == "/quit" || input == "/exit" {
+		if handleLocalCommand(trimmed, render) {
+			if trimmed == "/quit" || trimmed == "/exit" {
 				return
 			}
 			continue
@@ -107,7 +107,7 @@ func readInput(ctx context.Context, conn *safeConn, render *renderer) {
 			SessionID: render.sessionID,
 			Timestamp: time.Now().UnixMilli(),
 			Payload: map[string]any{
-				payloadKeyContent: input,
+				payloadKeyContent: trimmed,
 			},
 		}
 		if err := conn.WriteJSON(msg); err != nil {

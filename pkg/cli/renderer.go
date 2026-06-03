@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -33,16 +34,21 @@ type renderer struct {
 	spinnerVisible  bool
 	spinnerSeq      uint64
 
+	out          io.Writer
+	managedInput bool
+
 	messages map[string]messageView
 }
 
-func newRenderer(wsURL, sessionID string, showThoughts, showTools, compactTools bool) *renderer {
+func newRenderer(wsURL, sessionID string, showThoughts, showTools, compactTools bool, out io.Writer, managedInput bool) *renderer {
 	return &renderer{
 		wsURL:         wsURL,
 		sessionID:     sessionID,
 		showThoughts:  showThoughts,
 		showTools:     showTools,
 		compactTools:  compactTools,
+		out:           out,
+		managedInput:  managedInput,
 		messages:      make(map[string]messageView),
 		activeOpen:    false,
 		activeContent: "",
@@ -122,6 +128,7 @@ func (r *renderer) printWelcome() {
 		r.wrapKeyValue("Tool view", ternary(r.compactTools, "compact", "full")),
 		r.wrapKeyValue("Assistant replies", "markdown-rendered"),
 		r.wrapKeyValue("Commands", "/help /status /thoughts on|off /tools on|off /clear /quit"),
+		r.wrapKeyValue("Input", "Use up/down arrows to browse command history"),
 	}, "\n")
 	r.printPanel("Remote Pico CLI", body, colorAssistant)
 }
@@ -135,6 +142,8 @@ func (r *renderer) printHelp() {
 		"/tools on|off        Toggle tool event visibility",
 		"/clear               Clear the screen and redraw the header",
 		"/quit                Exit",
+		"",
+		"Use the up/down arrow keys to browse previously submitted input.",
 		"",
 		"Assistant replies render basic Markdown: headings, lists, links, tables, and code blocks.",
 	}, "\n")
@@ -189,6 +198,10 @@ func (r *renderer) setTyping(typing bool) {
 		return
 	}
 	r.typing = typing
+	if r.managedInput {
+		r.mu.Unlock()
+		return
+	}
 	if typing {
 		r.spinnerSeq++
 		seq := r.spinnerSeq
@@ -202,7 +215,7 @@ func (r *renderer) setTyping(typing bool) {
 
 func (r *renderer) clear() {
 	r.finishActive()
-	fmt.Print("\033[2J\033[H")
+	fmt.Fprint(r.out, "\033[2J\033[H")
 }
 
 func (r *renderer) printPrompt() {
@@ -210,7 +223,7 @@ func (r *renderer) printPrompt() {
 	defer r.mu.Unlock()
 
 	r.flushAssistantLocked()
-	fmt.Print(stylePrompt.Render("› "))
+	fmt.Fprint(r.out, stylePrompt.Render(promptText))
 	r.promptOpen = true
 }
 
@@ -237,7 +250,7 @@ func (r *renderer) printLine(prefix, text string) {
 	defer r.mu.Unlock()
 
 	r.ensureOutputLineLocked()
-	fmt.Printf("%s%s\n", prefix, text)
+	fmt.Fprintf(r.out, "%s%s\n", prefix, text)
 }
 
 func (r *renderer) printPanel(title, body string, accent lipgloss.Color) {
@@ -245,8 +258,8 @@ func (r *renderer) printPanel(title, body string, accent lipgloss.Color) {
 	defer r.mu.Unlock()
 
 	r.ensureOutputLineLocked()
-	fmt.Println(r.renderPanel(title, body, accent))
-	fmt.Println()
+	fmt.Fprintln(r.out, r.renderPanel(title, body, accent))
+	fmt.Fprintln(r.out)
 }
 
 func (r *renderer) renderPanel(title, body string, accent lipgloss.Color) string {
@@ -269,8 +282,8 @@ func (r *renderer) printTranscriptEntry(icon, title, meta, body string, accent l
 	defer r.mu.Unlock()
 
 	r.ensureOutputLineLocked()
-	fmt.Println(renderTranscriptEntry(icon, title, meta, body, accent))
-	fmt.Println()
+	fmt.Fprintln(r.out, renderTranscriptEntry(icon, title, meta, body, accent))
+	fmt.Fprintln(r.out)
 }
 
 func (r *renderer) printToolActivity(view messageView) {
@@ -285,11 +298,11 @@ func (r *renderer) printToolActivity(view messageView) {
 	r.ensureOutputLineLocked()
 	for idx, entry := range entries {
 		if idx > 0 {
-			fmt.Println()
+			fmt.Fprintln(r.out)
 		}
-		fmt.Println(entry)
+		fmt.Fprintln(r.out, entry)
 	}
-	fmt.Println()
+	fmt.Fprintln(r.out)
 }
 
 func (r *renderer) panelWidth() int {
@@ -332,8 +345,8 @@ func (r *renderer) flushAssistantLocked() {
 	}
 
 	r.ensureOutputLineLocked()
-	fmt.Println(renderTranscriptEntry("●", "Assistant", r.activeModel, renderAssistantMarkdown(r.activeContent), colorAssistant))
-	fmt.Println()
+	fmt.Fprintln(r.out, renderTranscriptEntry("●", "Assistant", r.activeModel, renderAssistantMarkdown(r.activeContent), colorAssistant))
+	fmt.Fprintln(r.out)
 	r.activeOpen = false
 	r.activeMessageID = ""
 	r.activeContent = ""
@@ -347,7 +360,7 @@ func (r *renderer) ensureOutputLineLocked() {
 		}
 		return
 	}
-	fmt.Println()
+	fmt.Fprintln(r.out)
 	r.promptOpen = false
 	if r.spinnerVisible {
 		r.clearSpinnerLocked()
@@ -358,7 +371,7 @@ func (r *renderer) clearSpinnerLocked() {
 	if !r.spinnerVisible {
 		return
 	}
-	fmt.Print("\r\033[K")
+	fmt.Fprint(r.out, "\r\033[K")
 	r.spinnerVisible = false
 }
 
@@ -376,12 +389,12 @@ func (r *renderer) runTypingSpinner(seq uint64) {
 		}
 
 		if r.promptOpen {
-			fmt.Println()
+			fmt.Fprintln(r.out)
 			r.promptOpen = false
 		}
 
 		label := styleStatus.Render(typingSpinnerFrames[frame] + " Thinking")
-		fmt.Print("\r\033[K" + label)
+		fmt.Fprint(r.out, "\r\033[K"+label)
 		r.spinnerVisible = true
 		r.mu.Unlock()
 
