@@ -5,8 +5,8 @@ A terminal-first remote CLI for PicoClaw.
 ## Usage
 
 ```bash
-go run ./cmd/picoclaw-cli \
-  -url ws://raspberry.tailnet.ts.net:18790/pico/ws \
+go run . \
+  -url ws://your-pico-host:18790/pico/ws \
   -token your-pico-token
 ```
 
@@ -15,6 +15,26 @@ go run ./cmd/picoclaw-cli \
 ```bash
 go install github.com/afjcjsbx/picoclaw-cli@latest
 ```
+
+Then run:
+
+```bash
+picoclaw-cli \
+  -url ws://your-pico-host:18790/pico/ws \
+  -token your-pico-token
+```
+
+If `picoclaw-cli` is not on your `PATH`, run it from Go's default bin directory:
+
+```bash
+~/go/bin/picoclaw-cli \
+  -url ws://your-pico-host:18790/pico/ws \
+  -token your-pico-token
+```
+
+The `-url` flag must be a complete WebSocket URL, including `ws://` or `wss://`.
+Use a host name or IP address only; SSH-style values like `user@host` are not
+valid here.
 
 The client opens a WebSocket session, sends `message.send`, and renders
 `message.create` / `message.update` replies in the terminal.
@@ -59,6 +79,6 @@ blocks.
 If the gateway on the Raspberry is only listening on `127.0.0.1`, tunnel it:
 
 ```bash
-ssh user@raspberry.tailnet.ts.net -L 18790:127.0.0.1:18790
+ssh user@your-tailnet-host.ts.net -L 18790:127.0.0.1:18790
 picoclaw-cli -url ws://127.0.0.1:18790/pico/ws -token your-pico-token
 ```
