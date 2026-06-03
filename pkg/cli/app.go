@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"bufio"
@@ -175,7 +175,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  /quit                Exit")
 }
 
-func main() {
+func Main() int {
 	var (
 		rawURL       string
 		token        string
@@ -207,7 +207,7 @@ func main() {
 
 	if strings.TrimSpace(rawURL) == "" {
 		usage()
-		os.Exit(2)
+		return 2
 	}
 
 	if strings.TrimSpace(sessionID) == "" {
@@ -217,7 +217,7 @@ func main() {
 	wsURL, err := buildWSURL(rawURL, sessionID, token, tokenQuery)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error> invalid url: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 
 	header := http.Header{}
@@ -231,7 +231,7 @@ func main() {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error> connect failed: %v\n", err)
-		os.Exit(1)
+		return 1
 	}
 	defer conn.Close()
 
@@ -265,6 +265,7 @@ func main() {
 	}
 
 	render.finishActive()
+	return 0
 }
 
 func envOr(key, fallback string) string {

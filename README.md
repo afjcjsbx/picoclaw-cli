@@ -5,7 +5,7 @@ A terminal-first remote CLI for PicoClaw.
 ## Usage
 
 ```bash
-go run . \
+go run ./cmd/picoclaw-cli \
   -url ws://raspberry.tailnet.ts.net:18790/pico/ws \
   -token your-pico-token
 ```
@@ -22,6 +22,11 @@ It separates normal assistant output from structured tool activity and,
 optionally, structured thought messages. Assistant replies are rendered as
 terminal-friendly Markdown, including headings, lists, links, tables, and code
 blocks.
+
+## Project layout
+
+- `cmd/picoclaw-cli` contains the executable entrypoint
+- `pkg/cli` contains the reusable CLI and TUI logic
 
 ### Flags
 

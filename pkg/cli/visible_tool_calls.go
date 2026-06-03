@@ -1,4 +1,4 @@
-package main
+package cli
 
 type VisibleToolCall struct {
 	ID           string                       `json:"id,omitempty"`
