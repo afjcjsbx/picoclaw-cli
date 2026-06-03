@@ -25,6 +25,7 @@ blocks.
 
 ## Project layout
 
+- `main.go` lets `go install github.com/afjcjsbx/picoclaw-cli@latest` work from the module root
 - `cmd/picoclaw-cli` contains the executable entrypoint
 - `pkg/cli` contains the reusable CLI and TUI logic
 
