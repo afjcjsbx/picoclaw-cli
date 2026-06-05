@@ -130,7 +130,7 @@ func (r *renderer) printWelcome() {
 		r.wrapKeyValue("Tool view", ternary(r.compactTools, "compact", "full")),
 		r.wrapKeyValue("Assistant replies", "markdown-rendered"),
 		r.wrapKeyValue("Commands", "/help /status /thoughts on|off /tools on|off /clear /quit"),
-		r.wrapKeyValue("Input", fmt.Sprintf("Use up/down for saved history (last %d), live hints + Tab for /commands", defaultHistoryMaxEntries)),
+		r.wrapKeyValue("Input", fmt.Sprintf("Use up/down for saved history (last %d), live hints + Tab for /commands, multiline paste is previewed before send", defaultHistoryMaxEntries)),
 	}, "\n")
 	r.printPanel("Remote Pico CLI", body, colorAssistant)
 }
@@ -149,6 +149,7 @@ func (r *renderer) printHelp() {
 		"Live suggestions appear while typing local /commands.",
 		"Press Tab to autocomplete local /commands and toggle values.",
 		fmt.Sprintf("History is persisted between sessions and keeps the last %d entries.", defaultHistoryMaxEntries),
+		"Multiline paste stays in one draft and is previewed before send; Enter sends it, Backspace or Ctrl+U discard it.",
 		"",
 		"Assistant replies render basic Markdown: headings, lists, links, tables, and code blocks.",
 	}, "\n")
@@ -203,18 +204,26 @@ func (r *renderer) setTyping(typing bool) {
 		return
 	}
 	r.typing = typing
+	managed := r.managedInput
+	overlay := r.overlay
 	if typing {
+		if managed {
+			r.spinnerSeq++
+			seq := r.spinnerSeq
+			r.mu.Unlock()
+			go r.runTypingSpinner(seq)
+			return
+		}
 		r.spinnerSeq++
 		seq := r.spinnerSeq
 		r.mu.Unlock()
 		go r.runTypingSpinner(seq)
 		return
 	}
-	if r.managedInput {
-		overlay := r.overlay
+	if managed {
 		r.mu.Unlock()
 		if overlay != nil {
-			overlay.ClearTransient()
+			overlay.ClearSpinner()
 		}
 		return
 	}
@@ -399,7 +408,7 @@ func (r *renderer) runTypingSpinner(seq uint64) {
 			}
 			r.mu.Unlock()
 			if managed && overlay != nil {
-				overlay.ClearTransient()
+				overlay.ClearSpinner()
 			}
 			return
 		}
@@ -408,7 +417,7 @@ func (r *renderer) runTypingSpinner(seq uint64) {
 		if managed {
 			r.mu.Unlock()
 			if overlay != nil {
-				overlay.ShowTransient(label)
+				overlay.ShowSpinner(label)
 			}
 		} else {
 			if r.promptOpen {

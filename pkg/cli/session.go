@@ -90,12 +90,13 @@ func readInput(ctx context.Context, conn *safeConn, render *renderer, input line
 		default:
 		}
 
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
+		content, ok := submittedContent(line)
+		if !ok {
 			continue
 		}
+		trimmed := strings.TrimSpace(line)
 
-		if handleLocalCommand(trimmed, render) {
+		if isLocalCommandLine(line) && handleLocalCommand(trimmed, render) {
 			if trimmed == "/quit" || trimmed == "/exit" {
 				return
 			}
@@ -108,7 +109,7 @@ func readInput(ctx context.Context, conn *safeConn, render *renderer, input line
 			SessionID: render.sessionID,
 			Timestamp: time.Now().UnixMilli(),
 			Payload: map[string]any{
-				payloadKeyContent: trimmed,
+				payloadKeyContent: content,
 			},
 		}
 		if err := conn.WriteJSON(msg); err != nil {
@@ -116,6 +117,17 @@ func readInput(ctx context.Context, conn *safeConn, render *renderer, input line
 			return
 		}
 	}
+}
+
+func submittedContent(line string) (string, bool) {
+	if strings.TrimSpace(line) == "" {
+		return "", false
+	}
+	return line, true
+}
+
+func isLocalCommandLine(line string) bool {
+	return !strings.Contains(line, "\n")
 }
 
 func handleLocalCommand(input string, render *renderer) bool {
