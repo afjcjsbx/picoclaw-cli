@@ -45,15 +45,14 @@ func defaultHistoryPath() (string, error) {
 }
 
 func (h *persistentHistory) Add(entry string) {
-	trimmed := strings.TrimSpace(entry)
-	if trimmed == "" {
+	if strings.TrimSpace(entry) == "" {
 		return
 	}
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	h.entries = append(h.entries, trimmed)
+	h.entries = append(h.entries, entry)
 	if len(h.entries) > h.maxEntries {
 		h.entries = append([]string(nil), h.entries[len(h.entries)-h.maxEntries:]...)
 	}
@@ -91,9 +90,8 @@ func (h *persistentHistory) load() error {
 	}
 
 	for _, entry := range entries {
-		trimmed := strings.TrimSpace(entry)
-		if trimmed != "" {
-			h.entries = append(h.entries, trimmed)
+		if strings.TrimSpace(entry) != "" {
+			h.entries = append(h.entries, entry)
 		}
 	}
 	if len(h.entries) > h.maxEntries {

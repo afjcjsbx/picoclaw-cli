@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"golang.org/x/term"
 )
 
 func Main() int {
@@ -52,6 +53,14 @@ func Main() int {
 	ws := &safeConn{conn: conn}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+
+	if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		if err := runBubbleTeaCLI(ctx, wsURL, opts, conn, ws); err != nil {
+			fmt.Fprintf(os.Stderr, "error> tui failed: %v\n", err)
+			return 1
+		}
+		return 0
+	}
 
 	input, err := newLineReader()
 	if err != nil {
