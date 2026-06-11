@@ -219,6 +219,94 @@ func TestTUIMessageUpdateStaysInsideCurrentTurn(t *testing.T) {
 	}
 }
 
+func TestTUIMouseSelectionCopiesTranscriptText(t *testing.T) {
+	model := newTUITestModel()
+	model.viewport.Width = 20
+	model.viewport.Height = 5
+	model.viewport.SetContent("alpha\nbeta\ngamma")
+
+	var copied string
+	prevClipboard := writeClipboard
+	writeClipboard = func(text string) error {
+		copied = text
+		return nil
+	}
+	defer func() {
+		writeClipboard = prevClipboard
+	}()
+
+	updated, _ := model.Update(tea.MouseMsg{
+		X:      1,
+		Y:      0,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionPress,
+	})
+	next := updated.(tuiModel)
+
+	updated, _ = next.Update(tea.MouseMsg{
+		X:      2,
+		Y:      1,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionMotion,
+	})
+	next = updated.(tuiModel)
+
+	updated, _ = next.Update(tea.MouseMsg{
+		X:      2,
+		Y:      1,
+		Button: tea.MouseButtonLeft,
+		Action: tea.MouseActionRelease,
+	})
+	next = updated.(tuiModel)
+
+	if copied != "lpha\nbet" {
+		t.Fatalf("copied = %q, want selected transcript text", copied)
+	}
+	if !next.hasSelectionRange() {
+		t.Fatal("selection cleared after copy, want visible selection to remain")
+	}
+	if !strings.Contains(next.renderViewportView(), "lpha") {
+		t.Fatalf("rendered viewport = %q, want selected text to remain visible", next.renderViewportView())
+	}
+}
+
+func TestTUIRightClickRecopiesActiveSelection(t *testing.T) {
+	model := newTUITestModel()
+	model.viewport.Width = 20
+	model.viewport.Height = 5
+	model.viewport.SetContent("alpha\nbeta\ngamma")
+	model.selection = transcriptSelection{
+		active: true,
+		start:  selectionPoint{X: 1, Y: 0},
+		end:    selectionPoint{X: 2, Y: 1},
+	}
+
+	var copied string
+	prevClipboard := writeClipboard
+	writeClipboard = func(text string) error {
+		copied = text
+		return nil
+	}
+	defer func() {
+		writeClipboard = prevClipboard
+	}()
+
+	updated, _ := model.Update(tea.MouseMsg{
+		X:      2,
+		Y:      0,
+		Button: tea.MouseButtonRight,
+		Action: tea.MouseActionPress,
+	})
+	next := updated.(tuiModel)
+
+	if copied != "lpha\nbet" {
+		t.Fatalf("copied = %q, want selected transcript text on right click", copied)
+	}
+	if !next.hasSelectionRange() {
+		t.Fatal("selection cleared after right click, want it preserved")
+	}
+}
+
 func TestTUIWheelScrollsTranscript(t *testing.T) {
 	model := newTUITestModel()
 	for i := 0; i < 40; i++ {
@@ -418,10 +506,34 @@ func TestTUIRefreshViewportPreservesScrollPositionWhenContentChanges(t *testing.
 	}
 }
 
+func TestNewTUIModelDisablesMouseWheelByDefault(t *testing.T) {
+	model := newTUIModel("ws://example.test/pico/ws", cliOptions{
+		sessionID: "session-1",
+		showTools: true,
+	}, &safeConn{})
+
+	if model.viewport.MouseWheelEnabled {
+		t.Fatal("MouseWheelEnabled = true, want false when mouse mode is disabled")
+	}
+}
+
+func TestNewTUIModelEnablesMouseWheelWhenRequested(t *testing.T) {
+	model := newTUIModel("ws://example.test/pico/ws", cliOptions{
+		sessionID: "session-1",
+		showTools: true,
+		mouseMode: true,
+	}, &safeConn{})
+
+	if !model.viewport.MouseWheelEnabled {
+		t.Fatal("MouseWheelEnabled = false, want true when mouse mode is enabled")
+	}
+}
+
 func newTUITestModel() tuiModel {
 	model := newTUIModel("ws://example.test/pico/ws", cliOptions{
 		sessionID: "session-1",
 		showTools: true,
+		mouseMode: true,
 	}, &safeConn{})
 	model.history = nil
 	_ = model.input.Focus()

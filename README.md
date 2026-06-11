@@ -60,17 +60,23 @@ blocks.
 | `-session` | random UUID | Session id to reuse between runs |
 | `-token-query` | `false` | Send token as `?token=...` instead of `Authorization: Bearer ...` |
 | `-ping` | `25s` | Client ping interval |
+| `-mouse` | `false` | Capture the mouse for wheel scroll and drag-to-copy in the TUI; disables native terminal text selection |
 | `-show-thoughts` | `false` | Show structured thought messages |
 | `-tools` | `true` | Enable structured tool call / tool feedback panels |
 | `-show-tools` | `true` | Alias for `-tools` |
 | `-hide-tools` | `false` | Start with tool panels hidden |
 | `-compact-tools` | `false` | Show tool activity as compact headers only, without payload details |
 
+By default the TUI leaves mouse handling to your terminal so text remains
+selectable and copyable. Start with `-mouse` only if you want wheel scrolling
+and drag-to-copy inside the app instead.
+
 ## Interactive commands
 
 - Up/down arrows browse saved input history between sessions (last 100 entries)
 - As you type a local `/command`, matching suggestions appear in the prompt
 - `Tab` autocompletes local `/commands` and toggle values like `on`/`off`
+- Text selection and copy use your terminal's native behavior by default
 - `/help` shows the available commands
 - `/status` shows URL, session, and display toggles
 - `/session` prints the current session id

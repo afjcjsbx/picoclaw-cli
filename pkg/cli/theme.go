@@ -27,4 +27,5 @@ var (
 	styleMarkdownQuote  = lipgloss.NewStyle().Foreground(lipgloss.Color("#64748B"))
 	styleMarkdownRule   = lipgloss.NewStyle().Foreground(colorBorder)
 	styleMarkdownBullet = lipgloss.NewStyle().Foreground(colorAssistant).Bold(true)
+	styleSelection      = lipgloss.NewStyle().Foreground(lipgloss.Color("#111827")).Background(lipgloss.Color("#C7D2FE"))
 )

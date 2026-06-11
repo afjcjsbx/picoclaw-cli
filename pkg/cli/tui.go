@@ -65,6 +65,7 @@ type tuiModel struct {
 	typing             bool
 	lastPasteLineCount int
 	followTranscript   bool
+	selection          transcriptSelection
 
 	historyIndex       int
 	draftBeforeHistory string
@@ -72,12 +73,14 @@ type tuiModel struct {
 
 func runBubbleTeaCLI(ctx context.Context, wsURL string, opts cliOptions, conn *websocket.Conn, ws *safeConn) error {
 	model := newTUIModel(wsURL, opts, ws)
-	program := tea.NewProgram(
-		model,
+	programOptions := []tea.ProgramOption{
 		tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
 		tea.WithContext(ctx),
-	)
+	}
+	if opts.mouseMode {
+		programOptions = append(programOptions, tea.WithMouseCellMotion())
+	}
+	program := tea.NewProgram(model, programOptions...)
 
 	go readLoopToProgram(ctx, conn, program)
 	if opts.pingEvery > 0 {
@@ -150,7 +153,7 @@ func newTUIModel(wsURL string, opts cliOptions, conn *safeConn) tuiModel {
 		followTranscript:  true,
 		historyIndex:      -1,
 	}
-	model.viewport.MouseWheelEnabled = true
+	model.viewport.MouseWheelEnabled = opts.mouseMode
 	if historyStatus != "" {
 		model.addInfo(historyStatus)
 	}
@@ -176,19 +179,12 @@ func (m tuiModel) Init() tea.Cmd {
 func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		m.clearSelection()
 		m.resize(msg.Width, msg.Height)
 		m.refreshViewport(true)
 		return m, nil
 	case tea.MouseMsg:
-		var cmd tea.Cmd
-		if m.viewport.MouseWheelEnabled && msg.Action == tea.MouseActionPress && tea.MouseEvent(msg).IsWheel() {
-			m.viewport, cmd = m.viewport.Update(msg)
-			m.followTranscript = m.viewport.AtBottom()
-			return m, cmd
-		}
-		m.input, cmd = m.input.Update(msg)
-		m.resize(m.width, m.height)
-		return m, cmd
+		return m.handleMouse(msg)
 	case tuiMessage:
 		cmd := m.handlePicoMessage(msg.message)
 		m.refreshViewport(m.followTranscript)
@@ -211,6 +207,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, cmd
 	case tea.KeyMsg:
+		m.clearSelection()
 		return m.handleKey(msg)
 	default:
 		var cmd tea.Cmd
@@ -226,7 +223,7 @@ func (m tuiModel) View() string {
 	}
 
 	return strings.Join([]string{
-		m.viewport.View(),
+		m.renderViewportView(),
 		m.renderInput(),
 	}, "\n")
 }
@@ -538,12 +535,17 @@ func (m *tuiModel) refreshViewport(forceBottom bool) {
 }
 
 func (m tuiModel) renderHeader() string {
+	mouseMode := "native terminal selection/copy"
+	if m.opts.mouseMode {
+		mouseMode = "captured for wheel scroll + drag copy"
+	}
 	body := strings.Join([]string{
 		wrapWithPrefixes("Connected to: "+m.wsURL, "Connected to: ", strings.Repeat(" ", len("Connected to: ")), m.panelContentWidth()),
 		wrapWithPrefixes("Session: "+m.session, "Session: ", strings.Repeat(" ", len("Session: ")), m.panelContentWidth()),
 		"Thoughts: " + onOff(m.opts.showThoughts),
 		"Tools: " + onOff(m.opts.showTools),
 		"Tool view: " + ternary(m.opts.compactTools, "compact", "full"),
+		wrapWithPrefixes("Mouse: "+mouseMode, "Mouse: ", strings.Repeat(" ", len("Mouse: ")), m.panelContentWidth()),
 		wrapWithPrefixes("Commands: /help /status /thoughts on|off /tools on|off /clear /quit", "Commands: ", strings.Repeat(" ", len("Commands: ")), m.panelContentWidth()),
 		wrapWithPrefixes("Input: textarea mode; paste is native, Enter sends, Ctrl+J inserts newline", "Input: ", strings.Repeat(" ", len("Input: ")), m.panelContentWidth()),
 	}, "\n")
@@ -628,7 +630,7 @@ func (m tuiModel) renderEntry(entry tuiEntry) (string, bool) {
 }
 
 func (m tuiModel) renderHelp() string {
-	body := strings.Join([]string{
+	lines := []string{
 		"/help                Show commands",
 		"/status              Show current session and display settings",
 		"/session             Print the current session id",
@@ -640,20 +642,38 @@ func (m tuiModel) renderHelp() string {
 		"Enter sends the current draft.",
 		"Ctrl+J inserts a newline.",
 		"Paste keeps multiline structure in the textarea.",
-		"Use PgUp/PgDn or mouse wheel to scroll the transcript.",
+		"Use PgUp/PgDn to scroll the transcript.",
 		"Use Up/Down or Ctrl+P/Ctrl+N for input history.",
 		fmt.Sprintf("History is persisted between sessions and keeps the last %d entries.", defaultHistoryMaxEntries),
-	}, "\n")
+	}
+	if m.opts.mouseMode {
+		lines = append(lines,
+			"Mouse wheel scrolling is enabled.",
+			"Drag on the transcript to copy the visible selection to the clipboard.",
+			"Right-click an active transcript selection to copy it again.",
+		)
+	} else {
+		lines = append(lines,
+			"Mouse capture is off, so your terminal handles text selection and copy natively.",
+			"Restart with -mouse if you want wheel scrolling and drag-to-copy inside the app.",
+		)
+	}
+	body := strings.Join(lines, "\n")
 	return renderPanelForWidth("Help", body, colorAssistant, m.panelWidth())
 }
 
 func (m tuiModel) renderSessionStatus() string {
+	mouseMode := "native terminal selection/copy"
+	if m.opts.mouseMode {
+		mouseMode = "captured for wheel scroll + drag copy"
+	}
 	body := strings.Join([]string{
 		wrapWithPrefixes("URL: "+m.wsURL, "URL: ", strings.Repeat(" ", len("URL: ")), m.panelContentWidth()),
 		"Session: " + m.session,
 		"Thoughts: " + onOff(m.opts.showThoughts),
 		"Tools: " + onOff(m.opts.showTools),
 		"Tool view: " + ternary(m.opts.compactTools, "compact", "full"),
+		"Mouse: " + mouseMode,
 		"Assistant: markdown-rendered",
 		"Typing: " + onOff(m.typing),
 		"Input: Bubble Tea textarea",
