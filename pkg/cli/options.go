@@ -12,6 +12,7 @@ type cliOptions struct {
 	token        string
 	sessionID    string
 	compactTools bool
+	mouseMode    bool
 	tokenQuery   bool
 	pingEvery    time.Duration
 	hideTools    bool
@@ -27,6 +28,7 @@ func parseOptions() cliOptions {
 	flag.StringVar(&opts.sessionID, "session", envOr("PICO_REMOTE_SESSION", ""), "Session id to reuse")
 	flag.BoolVar(&opts.tokenQuery, "token-query", false, "Send the token as ?token=... instead of Authorization header")
 	flag.DurationVar(&opts.pingEvery, "ping", 25*time.Second, "Client ping interval")
+	flag.BoolVar(&opts.mouseMode, "mouse", false, "Capture the mouse for wheel scroll and drag-to-copy in the TUI (disables native terminal text selection)")
 	flag.BoolVar(&opts.showThoughts, "show-thoughts", false, "Show structured thought messages when the server sends them")
 	flag.BoolVar(&opts.showTools, "tools", true, "Enable structured tool call and tool feedback panels")
 	flag.BoolVar(&opts.showTools, "show-tools", true, "Show structured tool call and tool feedback events")
@@ -51,4 +53,7 @@ func usage() {
 	fmt.Fprintln(os.Stderr, "  /tools on|off        Toggle tool event visibility")
 	fmt.Fprintln(os.Stderr, "  /clear               Clear the screen and redraw the header")
 	fmt.Fprintln(os.Stderr, "  /quit                Exit")
+	fmt.Fprintln(os.Stderr)
+	fmt.Fprintln(os.Stderr, "By default the TUI leaves mouse selection to your terminal so text stays selectable and copyable.")
+	fmt.Fprintln(os.Stderr, "Pass -mouse to enable wheel scrolling and drag-to-copy inside the app instead.")
 }
